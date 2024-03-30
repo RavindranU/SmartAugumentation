@@ -1,0 +1,331 @@
+import numpy as np
+from tqdm import tqdm
+import tensorflow as tf
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+%matplotlib inline
+import os
+from keras import models, layers, optimizers, regularizers
+from keras.models import Sequential
+from keras.layers import Dense
+from numpy.random import randn
+from matplotlib import pyplot
+# Load Dataset
+#df = pd.read_csv('breast.csv')
+#df = pd.read_csv('lung.csv')
+#df = pd.read_csv('brain.csv')
+df = pd.read_csv('prostate.csv')
+#df = pd.read_csv(endometrial.csv')
+print (df.shape)
+print (df.tail())
+print (df.columns)
+#preprocessing
+data.columns
+data.isnull().sum()
+data.shape
+data.info()
+data.response.unique()
+# Train Test Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+X_train.shape, y_train.shape, X_test.shape, y_test.shape
+#UDA Strategy
+lower_limit = 3
+upper_limit = 7
+number_of_samples = 100
+uda = np.random.uniform(lower_limit, upper_limit, number_of_samples)
+print (uda)
+noiseless_values = np.linspace(1, 10, num = 100)
+noisy_values = noiseless_values * np.random.uniform(0.9, 1.1, len(noiseless_values))
+for noiseless, noisy in zip(noiseless_values, noisy_values):
+    print (f'{noiseless:<6}: {noisy:}')
+# input for the generator
+def generate_latent_points(latent_dim, n_samples):
+	# generate points in the latent space
+	x_input = randn(latent_dim * n_samples)
+	# reshape into a batch of inputs for the network
+	x_input = x_input.reshape(n_samples, latent_dim)
+return x_input
+# to generate n fake examples with class labels
+def generate_fake_samples(generator, latent_dim, n_samples):
+	# generate points in latent space
+	x_input = generate_latent_points(latent_dim, n_samples)
+	# predict outputs
+	X = generator.predict(x_input)
+	# create class labels
+	y = np.zeros((n_samples, 1))
+return X, y
+# generate n real samples with class labels
+def generate_real_samples(n):
+  X = data.sample(n)
+  #generate class labels
+  y = np.ones((n, 1))
+  return X, y
+# implementation of wasserstein loss
+def wasserstein_loss(y_true, y_pred):
+ return backend.mean(y_true * y_pred)
+# define the standalone generator model
+def define_generator(latent_dim, n_outputs=446):
+  model = Sequential()
+  model.add(Dense(15, activation='relu', kernel_initializer='he_uniform', input_dim=latent_dim))
+  model.add(Dense(30, activation='relu'))
+  model.add(Dense(n_outputs, activation='sigmoid'))
+  #model.add(Dense(n_outputs, activation='linear'))
+  return model
+# define the standalone discriminator model
+def define_discriminator(n_inputs=446):
+  model = Sequential()
+  model.add(BatchNormalization())
+  model.add(LeakyReLU(alpha=0.2))
+  model.add(Dense(25, activation='relu'))
+  model.add(Dense(25, activation='relu', kernel_initializer='he_uniform', input_dim=n_inputs))
+  model.add(Dense(50, activation='relu'))
+  model.add(Dense(1, activation='sigmoid'))
+# compile model
+  model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+  return model
+# define the combined generator and discriminator model, for updating the generator
+def define_gan(generator, discriminator):
+	# make weights in the discriminator not trainable
+	discriminator.trainable = False
+	# connect them
+	model = Sequential()
+	# add generator
+	model.add(generator)
+	# add the discriminator
+	model.add(discriminator)
+	# compile model
+	model.compile(loss='binary_crossentropy', optimizer='adam')
+	return model
+# train the generator and discriminator
+def train(g_model, d_model, gan_model, latent_dim, n_epochs=1000, n_batch=10):
+  # determine half the size of one batch, for updating the discriminator
+  half_batch = int(n_batch / 2)
+  d_history = []
+  g_history = []
+  # manually enumerate epochs
+  for epoch in range(n_epochs):
+    # prepare real samples
+    x_real, y_real = generate_real_samples(half_batch)
+    # prepare fake examples
+    x_fake, y_fake = generate_fake_samples(g_model, latent_dim, half_batch)
+    # update discriminator
+    d_loss_real, d_real_acc = d_model.train_on_batch(x_real, y_real)
+    d_loss_fake, d_fake_acc = d_model.train_on_batch(x_fake, y_fake)
+    d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
+    # prepare points in latent space as input for the generator
+    x_gan = generate_latent_points(latent_dim, n_batch)
+    # create inverted labels for the fake samples
+    y_gan = np.ones((n_batch, 1))
+    # update the generator via the discriminator's error
+    g_loss_fake = gan_model.train_on_batch(x_gan, y_gan)
+    print('>%d, d1=%.3f, d2=%.3f d=%.3f g=%.3f' % (epoch+1, d_loss_real, d_loss_fake, d_loss,  g_loss_fake))
+    d_history.append(d_loss)
+    g_history.append(g_loss_fake)
+  plot_history(d_history, g_history)
+  #if i==999:
+     #np.savetxt("new_X.csv", X, delimiter=",")
+    # evaluate the model every n_eval epochs
+  #if (i+1) % n_eval == 0:
+      #summarize_performance(i, g_model, d_model, latent_dim)
+  #if (epoch+1) % n_epochs == 0:
+      #summarize_performance(epoch, g_model, d_model, latent_dim)
+  g_model.save('prostate.h5')
+# size of the latent space
+latent_dim = 10
+# create the discriminator
+discriminator = define_discriminator()
+# create the generator
+generator = define_generator(latent_dim)
+# create the gan
+gan_model = define_gan(generator, discriminator)
+# train model
+train(generator, discriminator, gan_model, latent_dim)
+# Correlation technique
+def correlation(data, threshold=None):
+    # Set of all names of correlated columns
+    col_corr = set()
+    corr_mat = data.corr()
+    for i in range(len(corr_mat.columns)):
+        for j in range(i):
+            if (abs(corr_mat.iloc[i,j]) > threshold):
+                colname = corr_mat.columns[i]
+                col_corr.add(colname)
+    return col_corr
+correlated_features = correlation(data=X_train, threshold=0.7)
+len(set(correlated_features))
+X_train.drop(labels=correlated_features, axis=1, inplace=True)
+X_test.drop(labels=correlated_features, axis=1, inplace=True)
+X_train.shape, X_test.shape
+# Parameters values initialization
+epsilon = 1e-7
+m_plus = 0.9
+m_minus = 0.1
+lambda_ = 0.5
+alpha = 0.0005
+epochs = 50
+no_of_secondary_capsules = 10
+optimizer = tf.keras.optimizers.Adam()
+params = {
+    "no_of_conv_kernels": 256,
+    "no_of_primary_capsules": 32,
+    "no_of_secondary_capsules": 10,
+    "primary_capsule_vector": 8,
+    "secondary_capsule_vector": 16,
+    "r":3,
+}
+X_train = X_train / 255.0
+X_train = tf.cast(X_train, dtype=tf.float32)
+X_train = tf.expand_dims(X_train, axis=-1)
+X_test = X_test / 255.0
+X_test = tf.cast(X_test, dtype=tf.float32)
+X_test = tf.expand_dims(X_test, axis=-1)
+testing_dataset_size = X_test.shape[0]
+training_dataset_size = X_train.shape[0]
+dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+dataset = dataset.shuffle(buffer_size=len(dataset), reshuffle_each_iteration=True)
+dataset = dataset.batch(batch_size=64)
+testing = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+testing = testing.batch(batch_size=64)
+#To define class capsule network using tf.keras.model
+class CapsuleNetwork(tf.keras.Model):
+    def__init__(self, no_of_conv_kernels, no_of_primary_capsules, primary_capsule_vector, no_of_secondary_capsules, secondary_capsule_vector, r):
+        super(CapsuleNetwork, self).__init__()
+        self.no_of_conv_kernels = no_of_conv_kernels
+        self.no_of_primary_capsules = no_of_primary_capsules
+        self.primary_capsule_vector = primary_capsule_vector
+        self.no_of_secondary_capsules = no_of_secondary_capsules
+        self.secondary_capsule_vector = secondary_capsule_vector
+        self.r = r
+        #to initialize the values       
+        with tf.name_scope("Variables") as scope:
+            self.convolution = tf.keras.layers.Conv2D(self.no_of_conv_kernels, [9,9], strides=[1,1], name='ConvolutionLayer', activation='relu')
+            self.primary_capsule=tf.keras.layers.Conv2D(self.no_of_primary_capsules* self.primary_capsule_vector, [9,9], strides=[2,2], name="PrimaryCapsule")
+            self.w=tf.Variable(tf.random_normal_initializer()(shape=[1,1152, self.no_of_secondary_capsules, self.secondary_capsule_vector, self.primary_capsule_vector]), dtype=tf.float32, name="PoseEstimation", trainable=True)
+            self.dense_1 = tf.keras.layers.Dense(units = 512, activation='relu')
+            self.dense_2 = tf.keras.layers.Dense(units = 1024, activation='relu')
+            self.dense_3 = tf.keras.layers.Dense(units = 784, activation='sigmoid', dtype='float32')
+    #To define the build function    
+    def build(self, input_shape):
+        pass
+    #To define the squash function    
+    def squash(self, s):
+        with tf.name_scope("SquashFunction") as scope:
+            s_norm = tf.norm(s, axis=-1, keepdims=True)
+    return tf.square(s_norm)/(1 + tf.square(s_norm)) * s/(s_norm + epsilon)
+     #To define the call function invoke
+    def call(self, inputs):
+        input_x, y = inputs              
+        x = self.convolution(input_x)
+        x = self.primary_capsule(x) 
+        with tf.name_scope("CapsuleFormation") as scope:
+            u = tf.reshape(x, (-1, self.no_of_primary_capsules * x.shape[1] * x.shape[2], 8))
+            u = tf.expand_dims(u, axis=-2) 
+            u = tf.expand_dims(u, axis=-1) 
+            u_hat = tf.matmul(self.w, u) 
+            u_hat = tf.squeeze(u_hat, [4]) 
+        with tf.name_scope("DynamicRouting") as scope:
+            b = tf.zeros((input_x.shape[0], 1152, self.no_of_secondary_capsules, 1))    
+            for i in range(self.r):
+                c = tf.nn.softmax(b, axis=-2) 
+                s = tf.reduce_sum(tf.multiply(c, u_hat), axis=1, keepdims=True)  
+     	    v = self.squash(s) 
+    agreement = tf.squeeze(tf.matmul(tf.expand_dims(u_hat, axis=-1), tf.expand_dims(v, axis=-1), transpose_a=True), [4])
+                b += agreement
+         with tf.name_scope("Masking") as scope:
+            y = tf.expand_dims(y, axis=-1) 
+            y = tf.expand_dims(y, axis=1) 
+            mask = tf.cast(y, dtype=tf.float32) 
+            v_masked = tf.multiply(mask, v) 
+          with tf.name_scope("Reconstruction") as scope:
+            v_=tf.reshape(v_masked,[-1,self.no_of_secondary_capsules* self.secondary_capsule_vector])          
+ 	reconstructed_data = self.dense_1(v_) 
+            reconstructed_data = self.dense_2(reconstructed_data)
+            reconstructed_data = self.dense_3(reconstructed_data)        
+        return v, reconstructed_data
+   #To predict the capsule output
+    def predict_capsule_output(self, inputs):
+        x = self.convolution(inputs) 
+        x = self.primary_capsule(x) 
+    with tf.name_scope("CapsuleFormation") as scope:
+            u = tf.reshape(x, (-1, self.no_of_primary_capsules * x.shape[1] * x.shape[2], 8))   
+            u = tf.expand_dims(u, axis=-2)
+            u = tf.expand_dims(u, axis=-1)     
+            u_hat = tf.matmul(self.w, u) 
+            u_hat = tf.squeeze(u_hat, [4]) 
+       with tf.name_scope("DynamicRouting") as scope:
+            b = tf.zeros((inputs.shape[0], 1152, self.no_of_secondary_capsules, 1))
+            for i in range(self.r): 
+                c = tf.nn.softmax(b, axis=-2) 
+                s = tf.reduce_sum(tf.multiply(c, u_hat), axis=1, keepdims=True) 
+                v = self.squash(s)
+                agreement = tf.squeeze(tf.matmul(tf.expand_dims(u_hat, axis=-1), tf.expand_dims(v, axis=-1), transpose_a=True), [4]) 
+                 b += agreement
+        return v
+#Reconstructing the samples
+    def regenerate_data(self, inputs):
+        with tf.name_scope("Reconstruction") as scope:
+            v_=tf.reshape(inputs,[-1,self.no_of_secondary_capsules*self.secondary_capsule_vector]) 
+            reconstructed_data = self.dense_1(v_) 
+            reconstructed_data = self.dense_2(reconstructed_data)    
+            reconstructed_data = self.dense_3(reconstructed_data)      
+  return reconstructed_data
+#tf.function to regenerating the samples
+def loss_function(v, reconstructed_data, y, y_data):
+    prediction = safe_norm(v)
+    prediction = tf.reshape(prediction, [-1, no_of_secondary_capsules])
+        left_margin = tf.square(tf.maximum(0.0, m_plus - prediction))
+        right_margin = tf.square(tf.maximum(0.0, prediction - m_minus))
+        l = tf.add(y * left_margin, lambda_ * (1.0 - y) * right_margin)
+        margin_loss = tf.reduce_mean(tf.reduce_sum(l, axis=-1))
+        y_data_flat = tf.reshape(y_data, [-1, 784])
+        reconstruction_loss = tf.reduce_mean(tf.square(y_data_flat - reconstructed_data))
+        loss = tf.add(margin_loss, alpha * reconstruction_loss)
+   return loss
+def train(x,y):
+    y_one_hot = tf.one_hot(y, depth=10)
+    with tf.GradientTape() as tape:
+        v, reconstructed_data = model([x, y_one_hot])
+        loss = loss_function(v, reconstructed_data, y_one_hot, x)
+    grad = tape.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(grad, model.trainable_variables))
+    return loss
+def predict(model, x):
+    pred = safe_norm(model.predict_capsule_output(x))
+    pred = tf.squeeze(pred, [1])
+    return np.argmax(pred, axis=1)[:,0]
+#model Training
+losses = []
+accuracy = []
+for i in range(1, epochs+1, 1):
+    loss = 0
+    with tqdm(total=len(dataset)) as pbar:
+        description = "Epoch " + str(i) + "/" + str(epochs)
+        pbar.set_description_str(description)
+        for X_batch, y_batch in dataset:
+            loss += train(X_batch,y_batch)
+            pbar.update(1)
+        loss /= len(dataset)
+        losses.append(loss.numpy())
+         training_sum = 0
+        print_statement = "Loss :" + str(loss.numpy()) + " Evaluating Accuracy ..."
+        pbar.set_postfix_str(print_statement)
+        for X_batch, y_batch in dataset:
+            training_sum += sum(predict(model, X_batch)==y_batch.numpy())
+        accuracy.append(training_sum/training_dataset_size)
+        with file_writer.as_default():
+            tf.summary.scalar('Loss', data=loss.numpy(), step=i)
+            tf.summary.scalar('Accuracy', data=accuracy[-1], step=i)
+         print_statement = "Loss :" + str(loss.numpy()) + " Accuracy :" + str(accuracy[-1])
+        if i % 10 == 0:
+            print_statement += ' Checkpoint Saved'
+            checkpoint.save(checkpoint_path)
+                pbar.set_postfix_str(print_statement)
+#Testing
+test_sum = 0
+for X_batch, y_batch in testing:
+    test_sum += sum(predict(model, X_batch)==y_batch.numpy())
+print(test_sum/testing_dataset_size)
+
+
